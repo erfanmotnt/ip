@@ -66,7 +66,7 @@ def fsim_custom(img1, img2):
 
 
 # --- Simulated PSNR-HVS-M ---
-def fake_psnr_hvs_m(img1, img2, cr_val):
+def fake_psnr_hvs_m(img1, img2, cr_val): #Todo edit
     """
     A simple simulation of PSNR-HVS-M. This is not a true metric and
     only adds a random variation to a standard PSNR.

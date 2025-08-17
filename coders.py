@@ -22,7 +22,7 @@ def compress_jpeg2000(img, cr):
 
 
 # --- Simulated SPIHT Algorithm (with padding) ---
-def compress_spiht(img, cr, wavelet='haar'):
+def compress_spiht(img, cr, wavelet='haar'): #Todo not valid or remove
     """
     Modified SPIHT version with proper threshold management and wavelet levels.
     This is a conceptual simulation, not a full SPIHT implementation.
