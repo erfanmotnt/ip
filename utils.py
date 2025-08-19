@@ -1,6 +1,12 @@
 import numpy as np
 from skimage import img_as_float, color
-from metrics import psnr, fake_psnr_hvs_m, fsim_custom
+from metrics import psnr, psnr_hvs_m, fsim
+from skimage import io
+from PIL import Image
+import pandas as pd
+import os
+import cv2
+
 
 def add_realistic_noise(image, sigma_mul=0.02, k=0.001, sigma_add=2.0):
     """
@@ -61,8 +67,8 @@ def simulate_metrics_for_codec(original_image, cr_list, compress_func):
                 compressed_for_metrics = compressed
 
             psnr_vals.append(psnr(original_image, compressed_for_metrics, data_range=1.0))
-            psnr_hvs_vals.append(fake_psnr_hvs_m(original_image, compressed_for_metrics, cr))
-            fsim_vals.append(fsim_custom(original_image, compressed_for_metrics))
+            psnr_hvs_vals.append(psnr_hvs_m(original_image, compressed_for_metrics, cr))
+            fsim_vals.append(fsim(original_image, compressed_for_metrics))
         except Exception as e:
             # If an error occurs during compression or metric calculation, append NaN
             print(f"Warning: Error during {compress_func.__name__} for CR={cr}: {e}")
@@ -71,3 +77,71 @@ def simulate_metrics_for_codec(original_image, cr_list, compress_func):
             fsim_vals.append(np.nan)
     return psnr_vals, psnr_hvs_vals, fsim_vals
 
+
+def read_image(image_path):
+    image = io.imread(image_path)
+    #image = add_realistic_noise(image * 255).astype(np.uint8)
+    if image.ndim == 3: 
+        image = color.rgb2gray(image) # Convert to grayscale if it's a color image
+    image = img_as_float(image) # Convert to float for processing (0-1 range)
+    return image
+    
+
+def read_raw(raw_image):
+    with open(raw_image, 'rb') as f:
+        # Specify dimensions and data type
+        image = np.fromfile(f, dtype=np.uint8)
+    image = image.reshape((512, 512))
+    
+    if image.ndim == 3: 
+        image = color.rgb2gray(image) # Convert to grayscale if it's a color image
+    image = img_as_float(image) # Convert to float for processing (0-1 range)
+    
+    return image
+
+
+def preprocess_xray(img: np.ndarray, target_size=512):
+    """
+    Downscale and crop/pad chest X-ray to 512x512.
+    
+    Args:
+        img (np.ndarray): Input X-ray (H, W) as numpy array (grayscale or RGB).
+        target_size (int): Final image size (default 512).
+    
+    Returns:
+        np.ndarray: Processed image (512, 512).
+    """
+    h, w = img.shape[:2]
+
+    # --- Step 1: Scale so smaller dimension = target_size ---
+    scale = target_size / min(h, w)
+    new_h, new_w = int(h * scale), int(w * scale)
+    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    # --- Step 2: Center-crop to target_size x target_size ---
+    start_x = (new_w - target_size) // 2
+    start_y = (new_h - target_size) // 2
+    cropped = resized[start_y:start_y + target_size, start_x:start_x + target_size]
+
+    return cropped
+
+def image_to_photoshop_raw(input_image, output_raw):
+    # Open JPEG and convert to grayscale (8-bit)
+    img = Image.open(input_image).convert("L")
+    
+    # Convert image to NumPy array
+    arr = np.array(img, dtype=np.uint8)
+    if min(arr.shape) < 1024:
+        print("IS SMALL: ", input_image)
+        return
+    arr = preprocess_xray(arr, target_size=512)
+    
+    # Write raw bytes to file
+    with open(output_raw, "wb") as f:
+        f.write(arr.tobytes())
+
+    # print(f"Converted {input_image} -> {output_raw}")
+    print(f"Image size: {arr.shape} (width x height)")
+    # print("In Photoshop, use: File > Import > Raw,")
+    # print("Set Channels = 1, Depth = 8 bits, Width/Height = above size.")
+    
